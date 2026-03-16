@@ -20,7 +20,17 @@ class DatasetMerger:
         """Prepare datasets for merging"""
         print(f"Audio dataset: {len(self.audio_df)} songs")
         print(f"Lyrics dataset: {len(self.lyrics_df)} songs")
-        
+
+        # Drop columns from lyrics_df that already exist in audio_df (besides the join keys)
+        # to avoid _audio/_lyrics suffixes after merge
+        join_keys = {'title', 'artist', 'year'}
+        audio_cols = set(self.audio_df.columns) - join_keys
+        duplicate_cols = [c for c in self.lyrics_df.columns
+                          if c in audio_cols and c not in join_keys]
+        if duplicate_cols:
+            self.lyrics_df = self.lyrics_df.drop(columns=duplicate_cols)
+            print(f"Dropped duplicate columns from lyrics before merge: {duplicate_cols}")
+
         # Ensure consistent column names and types
         for df in [self.audio_df, self.lyrics_df]:
             df['title'] = df['title'].astype(str)
@@ -77,6 +87,7 @@ class DatasetMerger:
             'unique_words': 'unique_words',
             'lexical_diversity': 'lexical_diversity',
             'avg_word_length': 'avg_word_length',
+            'compressibility': 'compressibility',
             'vader_compound': 'vader_compound',
             'vader_positive': 'vader_positive',
             'vader_negative': 'vader_negative',
@@ -111,6 +122,7 @@ class DatasetMerger:
             'audio_features': ['danceability', 'energy', 'valence', 'tempo', 
                               'acousticness', 'instrumentalness', 'speechiness', 'loudness'],
             'lyrics_features': ['lexical_diversity', 'word_count', 'avg_word_length',
+                               'compressibility',
                                'vader_compound', 'vader_positive', 'vader_negative',
                                'vader_neutral', 'textblob_polarity', 'textblob_subjectivity']
         }

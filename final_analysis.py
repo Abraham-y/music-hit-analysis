@@ -13,6 +13,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, f1_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics.pairwise import cosine_similarity
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -33,15 +34,19 @@ class FinalAnalyzer:
     
     def prepare_data(self):
         """Prepare data for analysis"""
+        if 'decade' not in self.df.columns:
+            self.df['decade'] = (self.df['year'] // 10 * 10).astype(str) + 's'
+
         print(f"Loaded merged dataset: {len(self.df)} songs")
         print(f"Years: {self.df['year'].min()} - {self.df['year'].max()}")
-        print(f"Top 10 hits: {self.df['top10'].sum()} ({self.df['top10'].mean()*100:.1f}%)")
+        print(f"Decades: {', '.join(sorted(self.df['decade'].unique()))}")
         
         # Define feature groups
         self.audio_features = ['danceability', 'energy', 'valence', 'tempo', 
                               'acousticness', 'instrumentalness', 'speechiness', 'loudness']
         
         self.lyrics_features = ['lexical_diversity', 'word_count', 'avg_word_length',
+                               'compressibility',
                                'vader_compound', 'vader_positive', 'vader_negative',
                                'vader_neutral', 'textblob_polarity', 'textblob_subjectivity']
         
@@ -70,7 +75,7 @@ class FinalAnalyzer:
         models = {
             'Random Forest': RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42),
             'KNN': KNeighborsClassifier(n_neighbors=7),
-            'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000, multi_class='multinomial')
+            'Logistic Regression': LogisticRegression(random_state=42, max_iter=1000)
         }
 
         results = {}
@@ -105,6 +110,20 @@ class FinalAnalyzer:
             print(f"  Macro F1: {f1:.3f}")
             print(f"  CV Score: {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
 
+            cm = confusion_matrix(y_test, y_pred)
+            cm_norm = cm.astype(float) / cm.sum(axis=1, keepdims=True)
+            per_class_acc = cm.diagonal() / cm.sum(axis=1)
+            print(f"\n  Confusion matrix (rows=true, cols=predicted):")
+            header = '        ' + ''.join(f'{d:>8}' for d in le.classes_)
+            print(header)
+            for i, decade in enumerate(le.classes_):
+                row = f'  {decade}  ' + ''.join(f'{cm_norm[i,j]:>8.2f}' for j in range(len(le.classes_)))
+                print(row)
+            print(f"\n  Per-decade recall:")
+            for decade, acc in zip(le.classes_, per_class_acc):
+                bar = '█' * int(acc * 20)
+                print(f"    {decade}: {acc:.2f} {bar}")
+
         return results, X_train, X_test, y_train, y_test, scaler
 
     def plot_shap_analysis(self, results, X_train, X_test):
@@ -116,17 +135,20 @@ class FinalAnalyzer:
         shap_values = explainer.shap_values(X_test)
 
         # Handle different SHAP output formats across versions
+        # For multiclass (6 decades), average abs SHAP across all classes
         if isinstance(shap_values, list):
-            sv = shap_values[1]
+            # list of arrays, one per class — average across all classes
+            mean_shap = np.mean([np.abs(sv).mean(axis=0) for sv in shap_values], axis=0)
+            sv = shap_values[0]  # for scatter plot, use first class
         elif hasattr(shap_values, 'ndim') and shap_values.ndim == 3:
-            sv = shap_values[:, :, 1]
+            # shape: (n_samples, n_features, n_classes) — average across classes
+            mean_shap = np.abs(shap_values).mean(axis=(0, 2))
+            sv = shap_values[:, :, 0]
         else:
             sv = shap_values
+            mean_shap = np.abs(sv).mean(axis=0)
 
         fig, axes = plt.subplots(1, 2, figsize=(18, 7))
-
-        # Beeswarm-style summary (mean abs SHAP per feature)
-        mean_shap = np.abs(sv).mean(axis=0)
         shap_df = pd.DataFrame({
             'feature': self.all_features,
             'mean_shap': mean_shap,
@@ -136,7 +158,7 @@ class FinalAnalyzer:
         colors = ['lightcoral' if t == 'Audio' else 'lightblue' for t in shap_df['type']]
         axes[0].barh(shap_df['feature'], shap_df['mean_shap'], color=colors, alpha=0.85)
         axes[0].set_xlabel('Mean |SHAP value|', fontsize=12)
-        axes[0].set_title('SHAP Feature Importance\n(Impact on Predicting a Hit)', fontsize=13, fontweight='bold')
+        axes[0].set_title('SHAP Feature Importance\n(Average impact on decade classification)', fontsize=13, fontweight='bold')
         axes[0].grid(True, alpha=0.3)
         from matplotlib.patches import Patch
         axes[0].legend(handles=[Patch(color='lightcoral', label='Audio'),
@@ -412,6 +434,55 @@ class FinalAnalyzer:
         plt.savefig('final_summary_poster.png', dpi=300, bbox_inches='tight')
         plt.show()
     
+    def plot_decade_similarity_heatmap(self):
+        """Cosine similarity between decade centroids in audio feature space"""
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(
+            self.df[self.audio_features].fillna(self.df[self.audio_features].mean())
+        )
+
+        decades = sorted(self.df['decade'].unique())
+        centroids = np.array([
+            X_scaled[self.df['decade'].values == d].mean(axis=0) for d in decades
+        ])
+
+        sim_matrix = cosine_similarity(centroids)
+        sim_df = pd.DataFrame(sim_matrix, index=decades, columns=decades)
+
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+        # Full similarity heatmap
+        sns.heatmap(sim_df, annot=True, fmt='.3f', cmap='RdYlGn',
+                    vmin=sim_matrix.min() - 0.01, vmax=1.0, ax=axes[0],
+                    linewidths=0.5, cbar_kws={'label': 'Cosine Similarity'})
+        axes[0].set_title('Decade-to-Decade Sonic Similarity\n(1.000 = identical average sound)',
+                          fontsize=13, fontweight='bold')
+        axes[0].set_xlabel('Decade')
+        axes[0].set_ylabel('Decade')
+
+        # Similarity to 1970s baseline
+        baseline = sim_df.loc['1970s'].drop('1970s')
+        colors = sns.color_palette('husl', len(baseline))
+        bars = axes[1].bar(baseline.index, baseline.values, color=colors, alpha=0.8)
+        y_min = baseline.values.min() - 0.005
+        axes[1].set_ylim(y_min, 1.002)
+        axes[1].set_xlabel('Decade', fontsize=12)
+        axes[1].set_ylabel('Cosine Similarity to 1970s', fontsize=12)
+        axes[1].set_title('How Far Has Each Decade Drifted\nFrom the 1970s Sound?',
+                          fontsize=13, fontweight='bold')
+        axes[1].grid(True, alpha=0.3)
+        for bar, val in zip(bars, baseline.values):
+            axes[1].text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.0005,
+                         f'{val:.3f}', ha='center', va='bottom')
+
+        plt.tight_layout()
+        plt.savefig('decade_similarity_heatmap.png', dpi=300, bbox_inches='tight')
+        plt.show()
+
+        print("\nDecade Cosine Similarity Matrix:")
+        print(sim_df.round(4).to_string())
+        return sim_df
+
     def run_complete_analysis(self):
         """Run the complete final analysis pipeline"""
         print("Starting Final Combined Analysis...")
@@ -432,7 +503,10 @@ class FinalAnalyzer:
         print("\\n5. Analyzing temporal patterns...")
         self.analyze_temporal_patterns()
 
-        print("\\n6. Creating final summary visualization...")
+        print("\\n6. Decade sonic similarity heatmap...")
+        sim_df = self.plot_decade_similarity_heatmap()
+
+        print("\\n7. Creating final summary visualization...")
         self.create_final_summary_visualization(feature_importance_df, audio_pct, lyrics_pct, results)
         
         print("\\nAnalysis complete! Check the generated PNG files.")

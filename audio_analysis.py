@@ -12,6 +12,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+from scipy import stats
 import joypy
 import plotly.express as px
 import plotly.graph_objects as go
@@ -52,22 +53,21 @@ class AudioAnalyzer:
     
     def plot_feature_distributions(self):
         """Create KDE plots showing feature distributions by decade"""
-        key_features = ['energy', 'danceability', 'valence', 'acousticness']
         decades = sorted(self.df['decade'].unique())
         colors = sns.color_palette('husl', len(decades))
 
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        fig, axes = plt.subplots(2, 4, figsize=(20, 10))
         axes = axes.flatten()
 
-        for i, feature in enumerate(key_features):
+        for i, feature in enumerate(self.audio_features):
             for j, decade in enumerate(decades):
                 data = self.df[self.df['decade'] == decade][feature].dropna()
                 sns.kdeplot(data, ax=axes[i], label=decade, color=colors[j],
                             fill=True, alpha=0.3, linewidth=1.5)
-            axes[i].set_title(f'{feature.title()} Distribution by Decade',
-                              fontsize=14, fontweight='bold')
-            axes[i].set_xlabel(feature.title(), fontsize=12)
-            axes[i].legend(fontsize=8, ncol=2)
+            axes[i].set_title(f'{feature.replace("_", " ").title()} Distribution by Decade',
+                              fontsize=12, fontweight='bold')
+            axes[i].set_xlabel(feature.replace('_', ' ').title(), fontsize=10)
+            axes[i].legend(fontsize=7, ncol=2)
 
         plt.tight_layout()
         plt.savefig('audio_ridgeline_plots.png', dpi=300, bbox_inches='tight')
@@ -75,28 +75,25 @@ class AudioAnalyzer:
     
     def plot_feature_trends(self):
         """Plot mean audio features over time with confidence bands"""
-        # Calculate yearly statistics
         yearly_stats = self.df.groupby('year')[self.audio_features].agg(['mean', 'std'])
-        
-        fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+
+        fig, axes = plt.subplots(2, 4, figsize=(20, 10))
         axes = axes.flatten()
-        
-        # Plot trends for key features
-        key_features = ['energy', 'danceability', 'valence', 'acousticness']
-        
-        for i, feature in enumerate(key_features):
+
+        for i, feature in enumerate(self.audio_features):
             years = yearly_stats.index
             means = yearly_stats[feature]['mean']
             stds = yearly_stats[feature]['std']
-            
+
             axes[i].plot(years, means, linewidth=3, color='royalblue')
             axes[i].fill_between(years, means - stds, means + stds, alpha=0.3, color='royalblue')
-            
-            axes[i].set_title(f'{feature.title()} Trend Over Time', fontsize=14, fontweight='bold')
-            axes[i].set_xlabel('Year', fontsize=12)
-            axes[i].set_ylabel(feature.title(), fontsize=12)
+
+            axes[i].set_title(f'{feature.replace("_", " ").title()} Trend Over Time',
+                              fontsize=12, fontweight='bold')
+            axes[i].set_xlabel('Year', fontsize=10)
+            axes[i].set_ylabel(feature.replace('_', ' ').title(), fontsize=10)
             axes[i].grid(True, alpha=0.3)
-        
+
         plt.tight_layout()
         plt.savefig('audio_feature_trends.png', dpi=300, bbox_inches='tight')
         plt.show()
@@ -252,32 +249,156 @@ class AudioAnalyzer:
         
         return success_correlations
     
+    def plot_variance_over_time(self):
+        """Plot rolling std dev of each audio feature per year — directly shows homogenization"""
+        yearly_std = self.df.groupby('year')[self.audio_features].std()
+        rolling_std = yearly_std.rolling(window=5, center=True).mean()
+
+        fig, axes = plt.subplots(2, 4, figsize=(18, 8))
+        axes = axes.flatten()
+
+        for i, feature in enumerate(self.audio_features):
+            axes[i].fill_between(yearly_std.index, yearly_std[feature], alpha=0.2, color='steelblue')
+            axes[i].plot(yearly_std.index, yearly_std[feature], alpha=0.4, linewidth=1, color='steelblue')
+            axes[i].plot(rolling_std.index, rolling_std[feature], linewidth=2.5, color='darkblue',
+                        label='5-yr rolling avg')
+            axes[i].set_title(feature.replace('_', ' ').title(), fontsize=11, fontweight='bold')
+            axes[i].set_xlabel('Year', fontsize=9)
+            axes[i].set_ylabel('Std Dev', fontsize=9)
+            axes[i].grid(True, alpha=0.3)
+            axes[i].legend(fontsize=8)
+
+        fig.suptitle('Audio Feature Variance Over Time\n(Decreasing = Songs Sound More Alike)',
+                     fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig('audio_variance_over_time.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        return yearly_std
+
+    def plot_inter_feature_correlation_by_decade(self):
+        """Correlation heatmap per decade — tighter correlations = more formula-driven sound"""
+        decades = sorted(self.df['decade'].unique())
+        features_to_use = ['energy', 'danceability', 'valence', 'acousticness',
+                           'speechiness', 'tempo_normalized']
+        labels = [f.replace('_normalized', '').replace('_', ' ') for f in features_to_use]
+
+        n = len(decades)
+        cols = 3
+        rows = (n + cols - 1) // cols
+        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+        axes = axes.flatten()
+
+        for i, decade in enumerate(decades):
+            data = self.df[self.df['decade'] == decade][features_to_use]
+            corr = data.corr()
+            mask = np.triu(np.ones_like(corr, dtype=bool))
+            sns.heatmap(corr, mask=mask, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
+                        ax=axes[i], cbar=False, annot_kws={'size': 7},
+                        xticklabels=labels, yticklabels=labels)
+            axes[i].set_title(decade, fontsize=12, fontweight='bold')
+            axes[i].tick_params(axis='x', rotation=45, labelsize=7)
+            axes[i].tick_params(axis='y', rotation=0, labelsize=7)
+
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+
+        fig.suptitle('Inter-Feature Correlations by Decade\n(Stronger correlations = more formulaic sound)',
+                     fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        plt.savefig('audio_inter_feature_correlation.png', dpi=300, bbox_inches='tight')
+        plt.show()
+
+    def plot_feature_significance(self):
+        """P-values and slopes for each audio feature trend over time"""
+        yearly_means = self.df.groupby('year')[self.audio_features].mean()
+        years = yearly_means.index.values
+
+        rows = []
+        for feature in self.audio_features:
+            values = yearly_means[feature].values
+            slope, intercept, r_value, p_value, std_err = stats.linregress(years, values)
+            rows.append({
+                'feature': feature,
+                'slope': slope,
+                'r_squared': r_value ** 2,
+                'p_value': p_value,
+                'significant': p_value < 0.05,
+                'direction': 'Increasing' if slope > 0 else 'Decreasing'
+            })
+
+        results_df = pd.DataFrame(rows).sort_values('p_value')
+
+        fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+        # -log10(p) bar chart
+        colors = ['forestgreen' if p < 0.05 else 'lightgray' for p in results_df['p_value']]
+        bars = axes[0].barh(results_df['feature'], -np.log10(results_df['p_value'].clip(lower=1e-10)),
+                            color=colors, alpha=0.8)
+        axes[0].axvline(x=-np.log10(0.05), color='red', linestyle='--', linewidth=2,
+                        label='p=0.05 threshold')
+        axes[0].set_xlabel('-log₁₀(p-value)  [Higher = More Significant]', fontsize=11)
+        axes[0].set_title('Statistical Significance of Audio Trends\n(Green = significant p<0.05)',
+                          fontsize=13, fontweight='bold')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        for bar, row in zip(bars, results_df.itertuples()):
+            axes[0].text(bar.get_width() + 0.05, bar.get_y() + bar.get_height() / 2,
+                         f'p={row.p_value:.3f}', va='center', fontsize=8)
+
+        # Slope direction chart
+        color_slope = ['tomato' if s < 0 else 'steelblue' for s in results_df['slope']]
+        axes[1].barh(results_df['feature'], results_df['slope'] * 1000, color=color_slope, alpha=0.8)
+        axes[1].axvline(x=0, color='black', linewidth=1)
+        axes[1].set_xlabel('Trend Slope (×10⁻³ per year)', fontsize=11)
+        axes[1].set_title('Direction of Each Feature Trend\n(Blue = increasing, Red = decreasing)',
+                          fontsize=13, fontweight='bold')
+        axes[1].grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig('audio_feature_significance.png', dpi=300, bbox_inches='tight')
+        plt.show()
+
+        print("\nAudio Feature Trend Significance:")
+        print(results_df[['feature', 'direction', 'slope', 'r_squared', 'p_value', 'significant']].to_string(index=False))
+        return results_df
+
     def run_full_analysis(self):
         """Run complete audio analysis pipeline"""
         print("Starting Audio Feature Analysis...")
         print("=" * 50)
-        
+
         print("\\n1. Creating feature distribution plots...")
         self.plot_feature_distributions()
-        
+
         print("\\n2. Analyzing feature trends over time...")
         self.plot_feature_trends()
-        
+
         print("\\n3. Creating correlation heatmap...")
         self.plot_correlation_heatmap()
-        
+
         print("\\n4. Performing PCA analysis...")
         pca_df, cluster_areas = self.perform_pca_analysis()
-        
+
         print("\\n5. Analyzing feature importance...")
         importance = self.analyze_feature_importance()
-        
+
+        print("\\n6. Plotting variance over time...")
+        yearly_std = self.plot_variance_over_time()
+
+        print("\\n7. Plotting inter-feature correlations by decade...")
+        self.plot_inter_feature_correlation_by_decade()
+
+        print("\\n8. Plotting feature trend significance...")
+        significance = self.plot_feature_significance()
+
         print("\\nAnalysis complete! Check the generated PNG files.")
-        
+
         return {
             'pca_results': pca_df,
             'cluster_areas': cluster_areas,
-            'feature_importance': importance
+            'feature_importance': importance,
+            'yearly_variance': yearly_std,
+            'trend_significance': significance
         }
 
 def main():
