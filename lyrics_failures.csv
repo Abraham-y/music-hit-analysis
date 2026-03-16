@@ -228,3 +228,46 @@ HTTPSConnectionPool(host='api.genius.com', port=443): Read timed out. (read time
 babybabybaby,tlc,1992,All methods failed
 321 pump,redhead kingpin & the f.b.i.,1992,All methods failed
 human touchbetter days,bruce springsteen,1992,All methods failed
+whats up doc,fu-schnickens w/ shaquille o'neal,1993,All methods failed
+typical reasons,prince markie dee and the soul convention,1993,All methods failed
+the flintstones,the b.c. 52's,1994,All methods failed
+screamchildhood,michael jackson & janet jackson,1995,All methods failed
+dear mamaold school,2pac,1995,All methods failed
+dream about youfunky melody,stevie b,1995,All methods failed
+any man of minewhose bed have your boots been under,shania twain,1995,All methods failed
+freak me baby,"dis `n' dat 95 south,69 boyz & k-nock",1995,All methods failed
+youre makin me highlet it flow,toni braxton,1996,All methods failed
+follow you downtil i hear it from you,gin blossoms,1996,All methods failed
+children,robert miles,1996,All methods failed
+aint no niggadead presidents,jay-z featuring foxxy brown,1996,All methods failed
+woohah got you all in checkeverything remains raw,busta rhymes,1996,All methods failed
+aint nobodykissing you,faith evans,1996,All methods failed
+ghettout,changing faces,1997,All methods failed
+espn presents the jock jam,various artists,1997,All methods failed
+sweet sexy thing,nu flavor featuring roger,1997,All methods failed
+if i could change,"master p featuring steady mobb'n, mia x, mo b. dick & o'dell",1997,All methods failed
+no one but you,veronica,1997,All methods failed
+da dip,mc luscious featuring kinsui,1997,All methods failed
+the boy is mine,brandy & monica,1998,All methods failed
+ghetto supastar,pras michel ol' dirty bastard & introducing mya,1998,All methods failed
+body bumpin yippieyiyo,public announcement,1998,All methods failed
+turn it up remixfire it up,busta rhymes,1998,All methods failed
+dingaling,hi-town djs,1998,All methods failed
+party aint a party,"queen pen featuring teddy riley, nutta butta, markell & jesse wes",1998,All methods failed
+no pigeons,sporty thievz featuring mr. woods,1999,All methods failed
+all star,smash mouth,1999,"Error: Request timed out:
+HTTPSConnectionPool(host='api.genius.com', port=443): Read timed out. (read timeout=5)"
+god must have spent a little more time on you,alabama featuring 'n sync,1999,All methods failed
+little goodbyes,shedaisy,1999,All methods failed
+got beef,snoop dogg presents tha eastsidaz featuring jayo felony and blaqthoven,2000,All methods failed
+fiesta,r. kelly featuring jay-z,2001,All methods failed
+i need a girl,"p. diddy & ginuwine featuring loon, mario winans & tammy ruggeri",2002,All methods failed
+down 4 u,"irv gotti presents the inc. featuring ja rule, ashanti, charli baltimore & vita",2002,All methods failed
+underneath your clothes,shakira,2002,All methods failed
+move bh,ludacris featuring mystikal & infamous 2.0,2002,All methods failed
+in da club,50 cent,2003,"Error: Request timed out:
+HTTPSConnectionPool(host='api.genius.com', port=443): Read timed out. (read timeout=5)"
+turn me on,kevin lyttle featuring spragga benz,2004,All methods failed
+locked up,akon featuring styles p.,2004,All methods failed
+sugar,"trick daddy featuring ludacris, lil' kim & cee-lo",2005,All methods failed
+enough cryin,mary j. blige featuring brook-lyn,2006,All methods failed
